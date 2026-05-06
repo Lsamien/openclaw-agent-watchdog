@@ -1,0 +1,161 @@
+{
+  "id": "agent-watchdog",
+  "name": "Agent Watchdog",
+  "description": "Monitors subagent task health, delivery state, and exposes a console dashboard.",
+  "version": "0.1.0",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "pollIntervalMs": {
+        "type": "integer",
+        "minimum": 5000,
+        "maximum": 600000,
+        "default": 15000
+      },
+      "staleAfterMs": {
+        "type": "integer",
+        "minimum": 30000,
+        "maximum": 86400000,
+        "default": 300000
+      },
+      "recentWindowMs": {
+        "type": "integer",
+        "minimum": 60000,
+        "maximum": 604800000,
+        "default": 21600000
+      },
+      "statusFile": {
+        "type": "string"
+      },
+      "openclawBin": {
+        "type": "string",
+        "default": "openclaw"
+      },
+      "openclawArgs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      },
+      "autoAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "chat_send",
+              "command"
+            ],
+            "default": "chat_send"
+          },
+          "notifyStalled": {
+            "type": "boolean",
+            "default": true
+          },
+          "notifyUndelivered": {
+            "type": "boolean",
+            "default": true
+          },
+          "stalledSessionKeyTemplate": {
+            "type": "string",
+            "default": "agent:{{agentId}}:main"
+          },
+          "stalledMessageTemplate": {
+            "type": "string"
+          },
+          "undeliveredSessionKeyTemplate": {
+            "type": "string",
+            "default": "{{requesterSessionKey}}"
+          },
+          "undeliveredMessageTemplate": {
+            "type": "string"
+          },
+          "maxProgressChars": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 4000,
+            "default": 600
+          },
+          "commandTemplate": {
+            "type": "string"
+          },
+          "cooldownMs": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 86400000,
+            "default": 600000
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 300000,
+            "default": 20000
+          }
+        }
+      },
+      "ui": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "refreshMs": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 60000,
+            "default": 3000
+          },
+          "maxRows": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 200,
+            "default": 30
+          }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "pollIntervalMs": {
+      "label": "Polling Interval (ms)",
+      "help": "How often watchdog refreshes health/tasks snapshot."
+    },
+    "staleAfterMs": {
+      "label": "Stale Threshold (ms)",
+      "help": "Running subagent task without progress beyond this is marked stalled."
+    },
+    "recentWindowMs": {
+      "label": "Recent Window (ms)",
+      "help": "Recent completed subagent tasks checked for delivery anomalies."
+    },
+    "autoAction.enabled": {
+      "label": "Enable Auto Action",
+      "help": "Run auto remediation when stalled/undelivered tasks are detected."
+    },
+    "autoAction.mode": {
+      "label": "Auto Action Mode",
+      "help": "chat_send: use gateway chat.send; command: run shell commandTemplate."
+    },
+    "autoAction.commandTemplate": {
+      "label": "Auto Action Command",
+      "help": "Command template (mode=command). Supports {{taskId}}, {{agentId}}, {{runId}}, {{label}}, {{status}}, {{stalledSeconds}}, {{requesterSessionKey}}, {{deliveryStatus}}, {{progressSummary}}."
+    },
+    "autoAction.stalledSessionKeyTemplate": {
+      "label": "Stalled Target Session",
+      "help": "Template for where stalled reminders are sent in chat_send mode."
+    },
+    "autoAction.undeliveredSessionKeyTemplate": {
+      "label": "Undelivered Target Session",
+      "help": "Template for where undelivered completion notices are sent in chat_send mode."
+    }
+  }
+}
