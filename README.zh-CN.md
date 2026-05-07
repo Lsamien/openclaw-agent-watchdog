@@ -59,6 +59,10 @@ openclaw watchdog ui
 - `{{progressSummary}}`
 - `{{childSessionKey}}`
 
+## 稳定性建议
+
+如果你看到日志中出现 `health command failed: exit code 1`，可以把 `healthTimeoutMs` 调大（例如 `25000` 或 `30000`），新版本也会在 health 失败时自动降级，不再让整个 watchdog tick 失败。
+
 ## 卸载
 
 ```bash

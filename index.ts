@@ -27,6 +27,7 @@ type WatchdogConfig = {
   pollIntervalMs: number;
   staleAfterMs: number;
   recentWindowMs: number;
+  healthTimeoutMs: number;
   statusFile: string;
   openclawBin: string;
   openclawArgs: string[];
@@ -122,6 +123,7 @@ const DEFAULTS: WatchdogConfig = {
   pollIntervalMs: 15000,
   staleAfterMs: 5 * 60 * 1000,
   recentWindowMs: 6 * 60 * 60 * 1000,
+  healthTimeoutMs: 25000,
   statusFile: "~/.openclaw/tmp/agent-watchdog/status.json",
   openclawBin: "openclaw",
   openclawArgs: [],
@@ -185,6 +187,7 @@ function normalizeConfig(raw: unknown): WatchdogConfig {
     pollIntervalMs: clampInt(cfg.pollIntervalMs, DEFAULTS.pollIntervalMs, 5000, 600000),
     staleAfterMs: clampInt(cfg.staleAfterMs, DEFAULTS.staleAfterMs, 30000, 86400000),
     recentWindowMs: clampInt(cfg.recentWindowMs, DEFAULTS.recentWindowMs, 60000, 604800000),
+    healthTimeoutMs: clampInt(cfg.healthTimeoutMs, DEFAULTS.healthTimeoutMs, 5000, 120000),
     statusFile: resolveHomePath(asString(cfg.statusFile, DEFAULTS.statusFile)),
     openclawBin: asString(cfg.openclawBin, DEFAULTS.openclawBin),
     openclawArgs: Array.isArray(cfg.openclawArgs)
@@ -367,23 +370,37 @@ function mapTaskAges(tasks: TaskEntry[], now: number) {
 function buildAgentView(health: UnknownRecord, sessions: UnknownRecord, active: TaskEntry[], stalled: TaskEntry[]) {
   const sessionList = Array.isArray(sessions.sessions) ? (sessions.sessions as UnknownRecord[]) : [];
   const sessionAgeByAgent = new Map<string, number>();
+  const agentNameById = new Map<string, string>();
+  const agentIds = new Set<string>();
   for (const s of sessionList) {
     const key = asString(s.key);
     const agentId = asString(s.agentId);
     const ageMs = asNumber(s.ageMs);
-    if (!key || !agentId || ageMs == null) continue;
-    if (key === `agent:${agentId}:main`) {
+    if (!key || !agentId) continue;
+    agentIds.add(agentId);
+    if (ageMs != null && key === `agent:${agentId}:main`) {
       sessionAgeByAgent.set(agentId, ageMs);
     }
   }
   const agents = Array.isArray(health.agents) ? (health.agents as UnknownRecord[]) : [];
-  return agents.map((agent) => {
+  for (const agent of agents) {
     const agentId = asString(agent.agentId);
+    if (!agentId) continue;
+    agentIds.add(agentId);
+    agentNameById.set(agentId, asString(agent.name, agentId));
+  }
+  for (const t of active) {
+    if (t.agentId) agentIds.add(t.agentId);
+  }
+  for (const t of stalled) {
+    if (t.agentId) agentIds.add(t.agentId);
+  }
+  return Array.from(agentIds).map((agentId) => {
     const a = active.filter((t) => t.agentId === agentId).length;
     const s = stalled.filter((t) => t.agentId === agentId).length;
     return {
       agentId,
-      name: asString(agent.name, agentId),
+      name: agentNameById.has(agentId) ? (agentNameById.get(agentId) as string) : agentId,
       mainSessionAgeMs: sessionAgeByAgent.has(agentId) ? (sessionAgeByAgent.get(agentId) as number) : null,
       activeSubagentTasks: a,
       stalledSubagentTasks: s,
@@ -422,12 +439,9 @@ export default {
 
       const healthCmd = await runCommand(
         cfg.openclawBin,
-        [...cfg.openclawArgs, "health", "--json"],
-        15000,
+        [...cfg.openclawArgs, "health", "--json", "--timeout", String(cfg.healthTimeoutMs)],
+        cfg.healthTimeoutMs + 5000,
       );
-      if (!healthCmd.ok) {
-        throw new Error(`health command failed: ${healthCmd.error || healthCmd.stderr || "unknown"}`);
-      }
       const tasksCmd = await runCommand(
         cfg.openclawBin,
         [...cfg.openclawArgs, "tasks", "list", "--runtime", "subagent", "--json"],
@@ -445,13 +459,17 @@ export default {
         throw new Error(`sessions command failed: ${sessionsCmd.error || sessionsCmd.stderr || "unknown"}`);
       }
 
-      let healthJson: UnknownRecord;
+      let healthJson: UnknownRecord = {};
       let tasksJson: UnknownRecord;
       let sessionsJson: UnknownRecord;
-      try {
-        healthJson = asObject(extractJsonFromMixedOutput(`${healthCmd.stdout}\n${healthCmd.stderr}`));
-      } catch (err) {
-        throw new Error(`failed to parse health JSON: ${String(err)}`);
+      if (!healthCmd.ok) {
+        errors.push(`health command failed: ${healthCmd.error || healthCmd.stderr || "unknown"}`);
+      } else {
+        try {
+          healthJson = asObject(extractJsonFromMixedOutput(`${healthCmd.stdout}\n${healthCmd.stderr}`));
+        } catch (err) {
+          errors.push(`failed to parse health JSON: ${String(err)}`);
+        }
       }
       try {
         tasksJson = asObject(extractJsonFromMixedOutput(`${tasksCmd.stdout}\n${tasksCmd.stderr}`));

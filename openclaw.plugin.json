@@ -29,6 +29,12 @@
         "maximum": 604800000,
         "default": 21600000
       },
+      "healthTimeoutMs": {
+        "type": "integer",
+        "minimum": 5000,
+        "maximum": 120000,
+        "default": 25000
+      },
       "statusFile": {
         "type": "string"
       },
@@ -136,6 +142,10 @@
     "recentWindowMs": {
       "label": "Recent Window (ms)",
       "help": "Recent completed subagent tasks checked for delivery anomalies."
+    },
+    "healthTimeoutMs": {
+      "label": "Health Timeout (ms)",
+      "help": "Timeout for `openclaw health --json` command."
     },
     "autoAction.enabled": {
       "label": "Enable Auto Action",
